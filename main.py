@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AIC Latency-first Retrieval Demo",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -53,6 +53,7 @@ def health(request: Request):
         "backend": status.__dict__,
         "default_top_k": settings.default_top_k,
         "profiles": ["fast", "auto", "accurate"],
+        "api_planner_ready": False,
     }
 
 
@@ -62,6 +63,12 @@ def config(request: Request):
     return {
         "mode": settings.mode,
         "backend": status.__dict__,
+        "api_planner_ready": False,
+        "profile_descriptions": {
+            "fast": "Visual-first; OCR chỉ khi tín hiệu rất mạnh.",
+            "auto": "Visual + OCR nhẹ song song; cân bằng recall và latency.",
+            "accurate": "Candidate pool lớn; OCR độc lập được phép ảnh hưởng ranking.",
+        },
         "latency_targets_ms": {
             "fast": settings.fast_total_target_ms,
             "auto": settings.auto_total_target_ms,
