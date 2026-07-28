@@ -105,3 +105,64 @@ notebooks/              notebook start/smoke test trên Kaggle
 - Visual và OCR artifact mode đã có adapter.
 - ASR là optional SQLite adapter với schema `segments` + `segments_fts`.
 - API planner chỉ được biểu diễn trong router; cloud call cố ý chưa bật để giữ demo đơn giản và latency ổn định.
+
+
+## Public API from Kaggle
+
+Run:
+
+`notebooks/04_START_DEMO_SERVER_KAGGLE_v2_PUBLIC_API.ipynb`
+
+The notebook prints a temporary `PUBLIC_API_URL`. Paste this URL into the
+GitHub Pages **Server API** field. The URL changes when the Kaggle session
+restarts.
+
+## v3 — Router và latency UI đã sửa
+
+- Match từ khóa theo ranh giới từ: `hát` không còn match nhầm trong `phát`.
+- Nhận diện prompt dạng `túi vải liên kết cùng phát triển` thành:
+  - visual query: `túi vải`
+  - OCR anchor: `liên kết cùng phát triển`
+- Auto chạy OCR index nhẹ song song. Khi OCR score yếu, OCR chỉ enrich candidate visual và không đưa candidate OCR-only vào gallery.
+- UI đổi `confidence` thành **routing score** và hiển thị trạng thái `Auto song song`, `Ép bật`, `Ép tắt`.
+- API planner được khóa Off vì backend chưa gọi model cloud.
+- UI tách rõ:
+  - thời gian trả kết quả end-to-end;
+  - server compute;
+  - network/Cloudflare overhead;
+  - visual/OCR/ASR latency.
+- Timestamp video hiển thị `Video mm:ss.xx`, không còn dễ nhầm với latency.
+
+
+## Interactive external agent v4
+
+Backend contract:
+
+```text
+app_build_version=agent-rag-v4.0
+agent_contract_version=external-agent-v1
+```
+
+Runtime:
+
+```text
+GitHub Pages
+→ FastAPI in Kaggle
+→ Groq planner/answer model
+→ local Visual/OCR/ASR retrieval
+→ evidence-grounded reply and gallery
+```
+
+Kaggle Secret:
+
+```text
+GROQ_API_KEY
+```
+
+Agent modes:
+
+- `local`: zero cloud calls.
+- `planner`: one cloud call, then local retrieval.
+- `full`: planner call + local retrieval + evidence-grounded answer call.
+
+The frontend never receives or stores the Groq key.
