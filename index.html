@@ -3,45 +3,151 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="AIC latency-first video retrieval demo">
-  <title>AIC Retrieval Demo</title>
+  <meta name="description" content="AIC interactive agent video retrieval demo">
+  <title>AIC Video Retrieval Agent</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">AIC </p>
-        <p class="subtitle">Visual luôn chạy. OCR, ASR và API planner được router bật theo prompt hoặc người dùng ép On/Off.</p>
+        <p class="eyebrow">AIC • retrieval agent • accuracy + latency</p>
+        <h1>Trao đổi với agent để tìm video và kiểm tra evidence</h1>
+        <p class="subtitle">
+          Retrieval Visual/OCR/ASR chạy trong Kaggle. Agent Groq lập kế hoạch,
+          gọi công cụ tìm kiếm và trả lời dựa trên candidate thực tế.
+        </p>
+        <p class="version-note">UI multi-provider-agent-v5.0</p>
       </div>
       <div class="health-card">
         <span id="healthDot" class="dot"></span>
         <div>
           <strong id="healthText">Chưa kiểm tra server</strong>
           <small id="backendText">API mặc định: cùng domain</small>
+          <small id="agentText">Agent: chưa kiểm tra</small>
         </div>
         <button id="healthButton" type="button" class="secondary">Kiểm tra</button>
       </div>
     </header>
 
-    <section class="control-panel">
+    <section class="connection-panel">
       <label class="field full">
         <span>Server API</span>
-        <input id="apiBase" type="url" placeholder="Để trống khi UI được serve cùng FastAPI; GitHub Pages nhập URL backend">
+        <input id="apiBase" type="url"
+          placeholder="Dán URL trycloudflare; chạy cùng FastAPI thì để trống">
       </label>
+    </section>
 
-      <label class="field full">
-        <span>Truy vấn</span>
-        <textarea id="query" rows="3">người đánh trống Yamaha ngoài trời</textarea>
-      </label>
+    <nav class="workspace-tabs" aria-label="Workspace">
+      <button type="button" class="tab active" data-tab="agent">Agent chat</button>
+      <button type="button" class="tab" data-tab="search">Direct search</button>
+    </nav>
 
-      <div class="field">
-        <span>Profile</span>
+    <section id="agentWorkspace" class="workspace">
+      <div class="agent-layout">
+        <section class="chat-panel">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Conversation</p>
+              <h2>Hỏi – tìm – refine nhiều lượt</h2>
+            </div>
+            <button id="newSessionButton" class="secondary small" type="button">
+              Cuộc trò chuyện mới
+            </button>
+          </div>
+
+          <div id="chatMessages" class="chat-messages" aria-live="polite">
+            <article class="message assistant">
+              <div class="message-role">Agent</div>
+              <p>
+                Mô tả video cần tìm. Tôi có thể tách visual/OCR/ASR, chạy
+                retrieval và trả lời dựa trên evidence.
+              </p>
+            </article>
+          </div>
+
+          <label class="field full">
+            <span>Tin nhắn</span>
+            <textarea id="agentMessage" rows="3"
+              placeholder="Ví dụ: tìm túi vải có dòng chữ liên kết cùng phát triển">túi vải liên kết cùng phát triển</textarea>
+          </label>
+
+          <div class="agent-actions">
+            <button id="agentSendButton" class="primary" type="button">
+              Gửi cho agent
+            </button>
+            <small>Ctrl/Cmd + Enter để gửi</small>
+          </div>
+        </section>
+
+        <aside class="agent-settings">
+          <p class="eyebrow">Agent runtime</p>
+          <h2>Chế độ tương tác</h2>
+
+          <label class="field">
+            <span>Agent mode</span>
+            <select id="agentMode">
+              <option value="local">Local — không gọi model</option>
+              <option value="planner" selected>Planner — 1 API call</option>
+              <option value="full">Full agent — planner + answer</option>
+            </select>
+            <small id="agentModeHelp"></small>
+          </label>
+
+          <label class="field">
+            <span>API provider</span>
+            <select id="agentProviderSelect">
+              <option value="auto" selected>Auto — provider sẵn sàng đầu tiên</option>
+            </select>
+            <small>API key nằm trong Kaggle Secrets, không nằm ở frontend.</small>
+          </label>
+
+          <label class="field">
+            <span>Model override (tùy chọn)</span>
+            <input id="agentModelOverride" type="text"
+              placeholder="Để trống để dùng Fast/Quality model mặc định">
+          </label>
+
+          <label class="field">
+            <span>Model tier</span>
+            <select id="agentModelTier">
+              <option value="auto" selected>Auto</option>
+              <option value="fast">Fast — GPT-OSS 20B</option>
+              <option value="quality">Quality — GPT-OSS 120B</option>
+            </select>
+          </label>
+
+          <div class="agent-runtime-card">
+            <span>Selected</span>
+            <strong id="agentProvider">—</strong>
+            <span>Ready APIs</span>
+            <strong id="agentModels">—</strong>
+            <span>Secrets</span>
+            <strong id="agentKeyStatus">Backend only</strong>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="searchWorkspace" class="workspace" hidden>
+      <section class="control-panel">
+        <label class="field full">
+          <span>Truy vấn trực tiếp</span>
+          <textarea id="query" rows="3">túi vải liên kết cùng phát triển</textarea>
+        </label>
+        <button id="searchButton" type="button" class="primary">Tìm kiếm</button>
+      </section>
+    </section>
+
+    <section class="shared-controls">
+      <div class="field profile-field">
+        <span>Retrieval profile</span>
         <div class="segmented" role="group" aria-label="Search profile">
-          <button type="button" data-profile="fast"> Fast</button>
-          <button type="button" data-profile="auto" class="active"> Auto</button>
-          <button type="button" data-profile="accurate"> Accurate</button>
+          <button type="button" data-profile="fast">⚡ Fast</button>
+          <button type="button" data-profile="auto" class="active">⚖ Auto</button>
+          <button type="button" data-profile="accurate">🎯 Accurate</button>
         </div>
+        <small id="profileHelp" class="profile-help"></small>
       </div>
 
       <label class="field">
@@ -62,15 +168,6 @@
         </select>
       </label>
 
-      <label class="field">
-        <span>API planner</span>
-        <select id="apiPlannerMode">
-          <option value="off" selected>Off</option>
-          <option value="auto">Auto</option>
-          <option value="on">On</option>
-        </select>
-      </label>
-
       <label class="field compact">
         <span>Top K</span>
         <input id="topK" type="number" min="1" max="100" value="20">
@@ -78,42 +175,84 @@
 
       <label class="check-row">
         <input id="adaptiveFallback" type="checkbox" checked>
-        <span>Adaptive fallback khi visual chưa chắc</span>
+        <span>Adaptive fallback</span>
       </label>
-
-      <button id="searchButton" type="button" class="primary">Tìm kiếm</button>
     </section>
 
     <section id="statusArea" class="status-area" aria-live="polite"></section>
 
     <section class="summary-grid" id="summaryGrid" hidden>
-      <article class="metric"><span>Total</span><strong id="totalLatency">—</strong></article>
-      <article class="metric"><span>Visual</span><strong id="visualLatency">—</strong></article>
-      <article class="metric"><span>OCR</span><strong id="ocrLatency">—</strong></article>
-      <article class="metric"><span>ASR</span><strong id="asrLatency">—</strong></article>
+      <article class="metric">
+        <span>End-to-end</span><strong id="endToEndLatency">—</strong>
+        <small>Browser → API → render</small>
+      </article>
+      <article class="metric">
+        <span>Agent total</span><strong id="agentTotalLatency">—</strong>
+        <small>Planner + retrieval + answer</small>
+      </article>
+      <article class="metric">
+        <span>Planner API</span><strong id="plannerLatency">—</strong>
+      </article>
+      <article class="metric">
+        <span>Retrieval</span><strong id="searchLatency">—</strong>
+      </article>
+      <article class="metric">
+        <span>Answer API</span><strong id="answerLatency">—</strong>
+      </article>
+      <article class="metric">
+        <span>Server search</span><strong id="serverLatency">—</strong>
+      </article>
+      <article class="metric">
+        <span>Visual</span><strong id="visualLatency">—</strong>
+      </article>
+      <article class="metric">
+        <span>OCR</span><strong id="ocrLatency">—</strong>
+      </article>
+      <article class="metric">
+        <span>ASR</span><strong id="asrLatency">—</strong>
+      </article>
+    </section>
+
+    <section id="agentPlanPanel" class="agent-plan-panel" hidden>
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Agent plan</p>
+          <h2>Truy vấn đã resolve</h2>
+        </div>
+        <span id="agentModelBadge" class="badge">—</span>
+      </div>
+      <div class="plan-grid">
+        <article><span>Resolved query</span><strong id="resolvedQuery">—</strong></article>
+        <article><span>Intent</span><strong id="agentIntent">—</strong></article>
+        <article><span>OCR / ASR</span><strong id="agentModalities">—</strong></article>
+        <article><span>Rationale</span><strong id="agentRationale">—</strong></article>
+      </div>
     </section>
 
     <section id="routePanel" class="route-panel" hidden>
       <div class="section-title">
         <div>
-          <p class="eyebrow">Router decision</p>
-          <h2>Module được bật theo prompt</h2>
+          <p class="eyebrow">Local router decision</p>
+          <h2>Điểm routing và trạng thái thực thi</h2>
         </div>
-        <span id="complexityBadge" class="badge">complexity —</span>
+        <span id="complexityBadge" class="badge">độ phức tạp —</span>
       </div>
+      <p class="route-note">
+        Routing score là heuristic bật module, không phải xác suất model đúng.
+      </p>
       <div id="routeCards" class="route-grid"></div>
     </section>
 
     <section>
       <div class="section-title">
         <div>
-          <p class="eyebrow">Results</p>
+          <p class="eyebrow">Evidence</p>
           <h2>Candidate gallery</h2>
         </div>
         <span id="resultCount" class="badge">0 kết quả</span>
       </div>
       <div id="results" class="results-grid">
-        <div class="empty">Nhấn “Tìm kiếm” để chạy demo.</div>
+        <div class="empty">Gửi tin nhắn cho agent hoặc chạy direct search.</div>
       </div>
     </section>
   </main>
