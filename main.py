@@ -9,11 +9,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from .agent import AgentService
 from .config import Settings
 from .engine import build_engine
-from .models import BenchmarkRequest, RouteRequest, SearchRequest
+from .models import (
+    AgentChatRequest,
+    BenchmarkRequest,
+    RouteRequest,
+    SearchRequest,
+)
 from .service import SearchService
 
+
+APP_BUILD_VERSION = "agent-rag-v4.0"
+ROUTER_CONTRACT_VERSION = "routing-score-v2"
+AGENT_CONTRACT_VERSION = "external-agent-v1"
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = ROOT / "docs"
@@ -24,12 +34,13 @@ settings = Settings.from_env()
 async def lifespan(app: FastAPI):
     engine = build_engine(settings)
     app.state.service = SearchService(engine, settings)
+    app.state.agent = AgentService(app.state.service, settings)
     yield
 
 
 app = FastAPI(
     title="AIC Latency-first Retrieval Demo",
-    version="0.2.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -45,6 +56,10 @@ def service(request: Request) -> SearchService:
     return request.app.state.service
 
 
+def agent_service(request: Request) -> AgentService:
+    return request.app.state.agent
+
+
 @app.get("/api/health")
 def health(request: Request):
     status = service(request).engine.status()
@@ -53,7 +68,11 @@ def health(request: Request):
         "backend": status.__dict__,
         "default_top_k": settings.default_top_k,
         "profiles": ["fast", "auto", "accurate"],
-        "api_planner_ready": False,
+        "api_planner_ready": agent_service(request).ready,
+        "agent": agent_service(request).status(),
+        "agent_contract_version": AGENT_CONTRACT_VERSION,
+        "app_build_version": APP_BUILD_VERSION,
+        "router_contract_version": ROUTER_CONTRACT_VERSION,
     }
 
 
@@ -63,7 +82,11 @@ def config(request: Request):
     return {
         "mode": settings.mode,
         "backend": status.__dict__,
-        "api_planner_ready": False,
+        "api_planner_ready": agent_service(request).ready,
+        "agent": agent_service(request).status(),
+        "agent_contract_version": AGENT_CONTRACT_VERSION,
+        "app_build_version": APP_BUILD_VERSION,
+        "router_contract_version": ROUTER_CONTRACT_VERSION,
         "profile_descriptions": {
             "fast": "Visual-first; OCR chỉ khi tín hiệu rất mạnh.",
             "auto": "Visual + OCR nhẹ song song; cân bằng recall và latency.",
@@ -93,6 +116,30 @@ def search(payload: SearchRequest, request: Request):
 @app.post("/api/benchmark")
 def benchmark(payload: BenchmarkRequest, request: Request):
     return service(request).benchmark(payload)
+
+
+@app.get("/api/agent/config")
+def agent_config(request: Request):
+    return agent_service(request).status()
+
+
+@app.post("/api/agent/chat")
+def agent_chat(payload: AgentChatRequest, request: Request):
+    try:
+        return agent_service(request).chat(payload)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
+@app.delete("/api/agent/session/{session_id}")
+def agent_reset(session_id: str, request: Request):
+    return {
+        "session_id": session_id,
+        "deleted": agent_service(request).reset(session_id),
+    }
 
 
 @app.get("/api/frame/{item_id}")
