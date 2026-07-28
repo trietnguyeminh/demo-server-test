@@ -48,11 +48,16 @@ class SearchService:
         asr: list[dict[str, Any]],
         anchors: list[str],
         top_k: int,
+        *,
+        ocr_allow_standalone: bool,
     ) -> list[SearchHit]:
         visual_by = {str(row["item_id"]): row for row in visual}
         ocr_by = {str(row["item_id"]): row for row in ocr}
         asr_by = {str(row["item_id"]): row for row in asr}
-        item_ids = set(visual_by) | set(ocr_by) | set(asr_by)
+        # Low-score Auto OCR is a cheap shadow search. It may enrich visual
+        # candidates, but cannot inject unrelated OCR-only items into the gallery.
+        ocr_ids = set(ocr_by) if ocr_allow_standalone else (set(ocr_by) & set(visual_by))
+        item_ids = set(visual_by) | ocr_ids | set(asr_by)
 
         fused: list[dict[str, Any]] = []
         rrf_k = 60.0
@@ -162,10 +167,10 @@ class SearchService:
 
         status = self.engine.status()
         if route.asr.enabled and not status.asr_ready:
-            warnings.append("ASR was requested but no ASR index is configured.")
+            warnings.append("ASR được router yêu cầu nhưng chưa có ASR index.")
         if route.api_planner.enabled:
             warnings.append(
-                "API planner routing is visible in the demo, but cloud calls are disabled."
+                "API planner chưa kết nối model cloud nên không được thực thi."
             )
 
         limits = PROFILE_LIMITS[request.profile]
@@ -187,6 +192,7 @@ class SearchService:
             "visual": [], "ocr": [], "asr": []
         }
         timings: dict[str, float] = {}
+        retrieval_started = time.perf_counter()
         with ThreadPoolExecutor(max_workers=max(1, len(tasks))) as executor:
             futures = {
                 name: executor.submit(self._timed, callback)
@@ -194,11 +200,11 @@ class SearchService:
             }
             for name, future in futures.items():
                 outputs[name], timings[f"{name}_ms"] = future.result()
+        retrieval_wall_ms = (time.perf_counter() - retrieval_started) * 1000.0
 
         fallback_used = False
         if (
             request.adaptive_fallback
-            and request.profile != SearchProfile.fast
             and not route.ocr.enabled
             and status.ocr_ready
             and 0.30 <= route.ocr.confidence < 0.65
@@ -218,21 +224,38 @@ class SearchService:
                 )
                 timings["ocr_fallback_ms"] = fallback_ms
                 fallback_used = True
-                warnings.append("OCR fallback ran because the visual margin was small.")
+                warnings.append("OCR fallback chạy vì margin visual quá nhỏ.")
 
         fusion_started = time.perf_counter()
+        ocr_allow_standalone = bool(
+            request.ocr.value == "on"
+            or request.profile == SearchProfile.accurate
+            or route.ocr.anchors
+            or route.ocr.routing_score >= 0.40
+        )
+        if (
+            route.ocr.enabled
+            and status.ocr_ready
+            and not ocr_allow_standalone
+        ):
+            warnings.append(
+                "OCR chạy song song ở chế độ shadow và chỉ bổ sung cho candidate visual."
+            )
+
         hits = self._fuse(
             outputs["visual"],
             outputs["ocr"],
             outputs["asr"],
             route.ocr.anchors,
             min(request.top_k, self.settings.max_top_k),
+            ocr_allow_standalone=ocr_allow_standalone,
         )
         fusion_ms = (time.perf_counter() - fusion_started) * 1000.0
         total_ms = (time.perf_counter() - total_started) * 1000.0
 
         latency = {
             "router_ms": round(route_ms, 3),
+            "retrieval_wall_ms": round(retrieval_wall_ms, 3),
             **{key: round(value, 3) for key, value in timings.items()},
             "fusion_ms": round(fusion_ms, 3),
             "total_ms": round(total_ms, 3),
