@@ -1,162 +1,153 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-import html
-from pathlib import Path
+from enum import Enum
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
-from fastapi.staticfiles import StaticFiles
-
-from .agent import AgentService
-from .config import Settings
-from .engine import build_engine
-from .models import (
-    AgentChatRequest,
-    BenchmarkRequest,
-    RouteRequest,
-    SearchRequest,
-)
-from .service import SearchService
+from pydantic import BaseModel, Field
 
 
-APP_BUILD_VERSION = "agent-rag-v4.0"
-ROUTER_CONTRACT_VERSION = "routing-score-v2"
-AGENT_CONTRACT_VERSION = "external-agent-v1"
-
-ROOT = Path(__file__).resolve().parents[1]
-WEB_ROOT = ROOT / "docs"
-settings = Settings.from_env()
+class SearchProfile(str, Enum):
+    fast = "fast"
+    auto = "auto"
+    accurate = "accurate"
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    engine = build_engine(settings)
-    app.state.service = SearchService(engine, settings)
-    app.state.agent = AgentService(app.state.service, settings)
-    yield
+class ModalityMode(str, Enum):
+    off = "off"
+    auto = "auto"
+    on = "on"
 
 
-app = FastAPI(
-    title="AIC Latency-first Retrieval Demo",
-    version="0.4.0",
-    lifespan=lifespan,
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=list(settings.cors_origins),
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
-def service(request: Request) -> SearchService:
-    return request.app.state.service
+class AgentMode(str, Enum):
+    local = "local"
+    planner = "planner"
+    full = "full"
 
 
-def agent_service(request: Request) -> AgentService:
-    return request.app.state.agent
+class AgentModelTier(str, Enum):
+    auto = "auto"
+    fast = "fast"
+    quality = "quality"
 
 
-@app.get("/api/health")
-def health(request: Request):
-    status = service(request).engine.status()
-    return {
-        "status": "ok",
-        "backend": status.__dict__,
-        "default_top_k": settings.default_top_k,
-        "profiles": ["fast", "auto", "accurate"],
-        "api_planner_ready": agent_service(request).ready,
-        "agent": agent_service(request).status(),
-        "agent_contract_version": AGENT_CONTRACT_VERSION,
-        "app_build_version": APP_BUILD_VERSION,
-        "router_contract_version": ROUTER_CONTRACT_VERSION,
-    }
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=1_000)
+    profile: SearchProfile = SearchProfile.auto
+    top_k: int = Field(default=20, ge=1, le=100)
+    ocr: ModalityMode = ModalityMode.auto
+    asr: ModalityMode = ModalityMode.auto
+    api_planner: ModalityMode = ModalityMode.off
+    adaptive_fallback: bool = True
 
 
-@app.get("/api/config")
-def config(request: Request):
-    status = service(request).engine.status()
-    return {
-        "mode": settings.mode,
-        "backend": status.__dict__,
-        "api_planner_ready": agent_service(request).ready,
-        "agent": agent_service(request).status(),
-        "agent_contract_version": AGENT_CONTRACT_VERSION,
-        "app_build_version": APP_BUILD_VERSION,
-        "router_contract_version": ROUTER_CONTRACT_VERSION,
-        "profile_descriptions": {
-            "fast": "Visual-first; OCR chỉ khi tín hiệu rất mạnh.",
-            "auto": "Visual + OCR nhẹ song song; cân bằng recall và latency.",
-            "accurate": "Candidate pool lớn; OCR độc lập được phép ảnh hưởng ranking.",
-        },
-        "latency_targets_ms": {
-            "fast": settings.fast_total_target_ms,
-            "auto": settings.auto_total_target_ms,
-            "accurate": settings.accurate_total_target_ms,
-        },
-    }
+class RouteRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=1_000)
+    profile: SearchProfile = SearchProfile.auto
+    ocr: ModalityMode = ModalityMode.auto
+    asr: ModalityMode = ModalityMode.auto
+    api_planner: ModalityMode = ModalityMode.off
 
 
-@app.post("/api/route")
-def route(payload: RouteRequest, request: Request):
-    return service(request).route(payload)
+class ModalityDecision(BaseModel):
+    enabled: bool
+    # Backward-compatible alias retained for older frontends. These are
+    # heuristic routing scores, not calibrated probabilities.
+    confidence: float = Field(ge=0.0, le=1.0)
+    routing_score: float = Field(ge=0.0, le=1.0)
+    mode: ModalityMode
+    execution_state: str
+    reason: str
+    anchors: list[str] = Field(default_factory=list)
 
 
-@app.post("/api/search")
-def search(payload: SearchRequest, request: Request):
-    try:
-        return service(request).search(payload)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+class RouteDecision(BaseModel):
+    query: str
+    visual_query: str
+    ocr_query: str
+    asr_query: str
+    visual: ModalityDecision
+    ocr: ModalityDecision
+    asr: ModalityDecision
+    api_planner: ModalityDecision
+    complexity: float = Field(ge=0.0, le=1.0)
+    notes: list[str] = Field(default_factory=list)
 
 
-@app.post("/api/benchmark")
-def benchmark(payload: BenchmarkRequest, request: Request):
-    return service(request).benchmark(payload)
+class SearchHit(BaseModel):
+    rank: int
+    item_id: str
+    video_id: str
+    pts_time: float
+    image_url: str
+    fused_score: float
+    visual_score: float | None = None
+    ocr_score: float | None = None
+    asr_score: float | None = None
+    ocr_text: str = ""
+    asr_text: str = ""
+    matched_anchors: list[str] = Field(default_factory=list)
+    modalities: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-@app.get("/api/agent/config")
-def agent_config(request: Request):
-    return agent_service(request).status()
+class SearchResponse(BaseModel):
+    query: str
+    profile: SearchProfile
+    route: RouteDecision
+    hits: list[SearchHit]
+    latency_ms: dict[str, float]
+    fallback_used: bool
+    warnings: list[str]
+    backend_mode: str
 
 
-@app.post("/api/agent/chat")
-def agent_chat(payload: AgentChatRequest, request: Request):
-    try:
-        return agent_service(request).chat(payload)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"{type(exc).__name__}: {exc}",
-        ) from exc
+class BenchmarkRequest(BaseModel):
+    queries: list[str] = Field(min_length=1, max_length=100)
+    profile: SearchProfile = SearchProfile.auto
+    repeats: int = Field(default=1, ge=1, le=10)
+    top_k: int = Field(default=10, ge=1, le=50)
 
 
-@app.delete("/api/agent/session/{session_id}")
-def agent_reset(session_id: str, request: Request):
-    return {
-        "session_id": session_id,
-        "deleted": agent_service(request).reset(session_id),
-    }
+class AgentPlan(BaseModel):
+    resolved_query: str
+    search_required: bool = True
+    ocr: ModalityMode = ModalityMode.auto
+    asr: ModalityMode = ModalityMode.auto
+    intent: str = "search"
+    rationale: str = ""
+    assistant_preface: str = ""
 
 
-@app.get("/api/frame/{item_id}")
-def frame(item_id: str, request: Request):
-    path = service(request).engine.frame_path(item_id)
-    if path is not None and path.is_file():
-        return FileResponse(path)
-
-    safe = html.escape(item_id)
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="#111827"/>
-      <rect x="28" y="28" width="584" height="304" rx="18" fill="#1f2937" stroke="#64748b"/>
-      <text x="320" y="165" text-anchor="middle" fill="#f8fafc" font-family="system-ui" font-size="28">AIC demo frame</text>
-      <text x="320" y="210" text-anchor="middle" fill="#cbd5e1" font-family="monospace" font-size="20">{safe}</text>
-    </svg>'''
-    return Response(svg, media_type="image/svg+xml")
+class AgentChatRequest(BaseModel):
+    session_id: str | None = Field(default=None, max_length=120)
+    message: str = Field(min_length=1, max_length=2_000)
+    mode: AgentMode = AgentMode.planner
+    model_tier: AgentModelTier = AgentModelTier.auto
+    profile: SearchProfile = SearchProfile.auto
+    top_k: int = Field(default=20, ge=1, le=100)
+    ocr: ModalityMode = ModalityMode.auto
+    asr: ModalityMode = ModalityMode.auto
+    adaptive_fallback: bool = True
 
 
-# Mount last so /api routes remain authoritative. The same files are GitHub Pages ready.
-app.mount("/", StaticFiles(directory=WEB_ROOT, html=True), name="ui")
+class AgentRuntimeInfo(BaseModel):
+    enabled: bool
+    ready: bool
+    provider: str
+    model: str | None = None
+    model_tier: AgentModelTier
+    fallback_used: bool = False
+    error: str | None = None
+    usage: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    plan: AgentPlan
+    search: SearchResponse | None = None
+    agent: AgentRuntimeInfo
+    latency_ms: dict[str, float]
+    warnings: list[str] = Field(default_factory=list)
