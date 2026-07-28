@@ -249,6 +249,30 @@ function switchTab(tab) {
   $("searchWorkspace").hidden = tab !== "search";
 }
 
+function populateProviders(agent) {
+  const select = $("agentProviderSelect");
+  const previous = select.value || "auto";
+  const providers = Array.isArray(agent?.providers) ? agent.providers : [];
+  select.innerHTML = '<option value="auto">Auto — provider sẵn sàng đầu tiên</option>'
+    + providers.map((provider) => {
+      const disabled = provider.ready ? "" : " disabled";
+      const suffix = provider.ready ? "ready" : "chưa cấu hình";
+      return `<option value="${escapeHtml(provider.id)}"${disabled}>`
+        + `${escapeHtml(provider.label)} — ${suffix}</option>`;
+    }).join("");
+  if ([...select.options].some((option) => option.value === previous && !option.disabled)) {
+    select.value = previous;
+  } else {
+    select.value = "auto";
+  }
+}
+
+function updateProviderHint(agent) {
+  const ready = agent?.ready_providers || [];
+  $("agentModels").textContent = ready.length ? ready.join(", ") : "Không có";
+  $("agentKeyStatus").textContent = `${agent?.ready_provider_count || 0} provider ready`;
+}
+
 async function checkHealth() {
   try {
     setStatus("Đang kiểm tra server và agent…");
@@ -269,11 +293,9 @@ async function checkHealth() {
       ? `Agent ${agent.provider} ready`
       : `Agent chưa sẵn sàng: ${agent.error || "disabled"}`;
     $("agentProvider").textContent =
-      `${agent.provider || "—"} • ${agent.ready ? "ready" : "not ready"}`;
-    $("agentModels").textContent =
-      `${agent.fast_model || "—"} / ${agent.quality_model || "—"}`;
-    $("agentKeyStatus").textContent =
-      agent.api_key_configured ? "Configured in backend" : "Missing";
+      `${agent.default_provider || "auto"} • ${agent.ready ? "ready" : "not ready"}`;
+    populateProviders(agent);
+    updateProviderHint(agent);
 
     setStatus(
       agent.ready
@@ -367,7 +389,9 @@ async function agentChat() {
         session_id: state.sessionId,
         message,
         mode: $("agentMode").value,
+        provider: $("agentProviderSelect").value,
         model_tier: $("agentModelTier").value,
+        model: $("agentModelOverride").value.trim() || null,
         ...sharedRetrievalPayload(),
       }),
     });
