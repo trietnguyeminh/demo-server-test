@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AIC latency-first video retrieval demo">
+  <title>AIC Retrieval Demo</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">AIC • latency-first multimodal retrieval</p>
+        <h1>Tìm video nhanh, vẫn giữ bằng chứng OCR/ASR khi cần</h1>
+        <p class="subtitle">Visual luôn chạy. OCR, ASR và API planner được router bật theo prompt hoặc người dùng ép On/Off.</p>
+      </div>
+      <div class="health-card">
+        <span id="healthDot" class="dot"></span>
+        <div>
+          <strong id="healthText">Chưa kiểm tra server</strong>
+          <small id="backendText">API mặc định: cùng domain</small>
+        </div>
+        <button id="healthButton" type="button" class="secondary">Kiểm tra</button>
+      </div>
+    </header>
+
+    <section class="control-panel">
+      <label class="field full">
+        <span>Server API</span>
+        <input id="apiBase" type="url" placeholder="Để trống khi UI được serve cùng FastAPI; GitHub Pages nhập URL backend">
+      </label>
+
+      <label class="field full">
+        <span>Truy vấn</span>
+        <textarea id="query" rows="3">người đánh trống Yamaha ngoài trời</textarea>
+      </label>
+
+      <div class="field">
+        <span>Profile</span>
+        <div class="segmented" role="group" aria-label="Search profile">
+          <button type="button" data-profile="fast">⚡ Fast</button>
+          <button type="button" data-profile="auto" class="active">⚖ Auto</button>
+          <button type="button" data-profile="accurate">🎯 Accurate</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>OCR</span>
+        <select id="ocrMode">
+          <option value="off">Off</option>
+          <option value="auto" selected>Auto</option>
+          <option value="on">On</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>ASR</span>
+        <select id="asrMode">
+          <option value="off">Off</option>
+          <option value="auto" selected>Auto</option>
+          <option value="on">On</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>API planner</span>
+        <select id="apiPlannerMode">
+          <option value="off" selected>Off</option>
+          <option value="auto">Auto</option>
+          <option value="on">On</option>
+        </select>
+      </label>
+
+      <label class="field compact">
+        <span>Top K</span>
+        <input id="topK" type="number" min="1" max="100" value="20">
+      </label>
+
+      <label class="check-row">
+        <input id="adaptiveFallback" type="checkbox" checked>
+        <span>Adaptive fallback khi visual chưa chắc</span>
+      </label>
+
+      <button id="searchButton" type="button" class="primary">Tìm kiếm</button>
+    </section>
+
+    <section id="statusArea" class="status-area" aria-live="polite"></section>
+
+    <section class="summary-grid" id="summaryGrid" hidden>
+      <article class="metric"><span>Total</span><strong id="totalLatency">—</strong></article>
+      <article class="metric"><span>Visual</span><strong id="visualLatency">—</strong></article>
+      <article class="metric"><span>OCR</span><strong id="ocrLatency">—</strong></article>
+      <article class="metric"><span>ASR</span><strong id="asrLatency">—</strong></article>
+    </section>
+
+    <section id="routePanel" class="route-panel" hidden>
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Router decision</p>
+          <h2>Module được bật theo prompt</h2>
+        </div>
+        <span id="complexityBadge" class="badge">complexity —</span>
+      </div>
+      <div id="routeCards" class="route-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Results</p>
+          <h2>Candidate gallery</h2>
+        </div>
+        <span id="resultCount" class="badge">0 kết quả</span>
+      </div>
+      <div id="results" class="results-grid">
+        <div class="empty">Nhấn “Tìm kiếm” để chạy demo.</div>
+      </div>
+    </section>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
