@@ -87,3 +87,33 @@ textarea { resize: vertical; }
   .health-card button { grid-column: 1 / -1; }
   .section-title { align-items: start; flex-direction: column; }
 }
+
+/* v3 router/latency clarity */
+.profile-field { min-width: 300px; }
+.profile-help, .disabled-field small, .metric small, .route-note {
+  color: var(--muted);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+.disabled-field select { opacity: .72; cursor: not-allowed; }
+.metric small { display: block; margin-top: 7px; }
+.route-note { margin: -6px 0 14px; }
+.route-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.route-card-head h3 { margin: 0; }
+.state-badge {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--muted);
+  font-size: .68rem;
+  white-space: nowrap;
+}
+.route-card.enabled .state-badge { color: var(--good); border-color: rgba(52,211,153,.35); }
+.summary-grid { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .summary-grid { grid-template-columns: 1fr; }
+}
