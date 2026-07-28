@@ -166,3 +166,8 @@ Agent modes:
 - `full`: planner call + local retrieval + evidence-grounded answer call.
 
 The frontend never receives or stores the Groq key.
+
+## Multi-provider agent v5
+
+The agent is no longer Groq-only. Select any configured provider in the UI.
+The backend exposes no secret values. See `report/MULTI_PROVIDER_AGENT_V5.md`.
