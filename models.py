@@ -18,6 +18,20 @@ class ModalityMode(str, Enum):
     on = "on"
 
 
+
+
+class AgentMode(str, Enum):
+    local = "local"
+    planner = "planner"
+    full = "full"
+
+
+class AgentModelTier(str, Enum):
+    auto = "auto"
+    fast = "fast"
+    quality = "quality"
+
+
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=1_000)
     profile: SearchProfile = SearchProfile.auto
@@ -94,3 +108,49 @@ class BenchmarkRequest(BaseModel):
     profile: SearchProfile = SearchProfile.auto
     repeats: int = Field(default=1, ge=1, le=10)
     top_k: int = Field(default=10, ge=1, le=50)
+
+
+class AgentPlan(BaseModel):
+    resolved_query: str
+    search_required: bool = True
+    ocr: ModalityMode = ModalityMode.auto
+    asr: ModalityMode = ModalityMode.auto
+    intent: str = "search"
+    rationale: str = ""
+    assistant_preface: str = ""
+
+
+class AgentChatRequest(BaseModel):
+    session_id: str | None = Field(default=None, max_length=120)
+    message: str = Field(min_length=1, max_length=2_000)
+    mode: AgentMode = AgentMode.planner
+    provider: str = Field(default="auto", min_length=1, max_length=80)
+    model_tier: AgentModelTier = AgentModelTier.auto
+    model: str | None = Field(default=None, max_length=240)
+    profile: SearchProfile = SearchProfile.auto
+    top_k: int = Field(default=20, ge=1, le=100)
+    ocr: ModalityMode = ModalityMode.auto
+    asr: ModalityMode = ModalityMode.auto
+    adaptive_fallback: bool = True
+
+
+class AgentRuntimeInfo(BaseModel):
+    enabled: bool
+    ready: bool
+    requested_provider: str
+    provider: str
+    model: str | None = None
+    model_tier: AgentModelTier
+    fallback_used: bool = False
+    error: str | None = None
+    usage: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    plan: AgentPlan
+    search: SearchResponse | None = None
+    agent: AgentRuntimeInfo
+    latency_ms: dict[str, float]
+    warnings: list[str] = Field(default_factory=list)
