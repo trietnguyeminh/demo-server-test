@@ -59,6 +59,18 @@ class Settings:
     auto_total_target_ms: float
     accurate_total_target_ms: float
 
+    agent_enabled: bool
+    agent_provider: str
+    agent_base_url: str
+    agent_fast_model: str
+    agent_quality_model: str
+    agent_timeout_s: float
+    agent_max_history: int
+    agent_session_ttl_s: int
+    agent_max_evidence_hits: int
+    agent_service_tier: str
+    groq_api_key: str | None
+
     @classmethod
     def from_env(cls) -> "Settings":
         roots = tuple(Path(value) for value in _env_list("AIC_PROJECT_ROOTS"))
@@ -82,4 +94,30 @@ class Settings:
             fast_total_target_ms=_env_float("AIC_FAST_TARGET_MS", 2_000.0),
             auto_total_target_ms=_env_float("AIC_AUTO_TARGET_MS", 5_000.0),
             accurate_total_target_ms=_env_float("AIC_ACCURATE_TARGET_MS", 8_000.0),
+            agent_enabled=_env_bool("AIC_AGENT_ENABLED", False),
+            agent_provider=os.getenv("AIC_AGENT_PROVIDER", "groq").strip().lower(),
+            agent_base_url=os.getenv(
+                "AIC_AGENT_BASE_URL",
+                "https://api.groq.com/openai/v1",
+            ).rstrip("/"),
+            agent_fast_model=os.getenv(
+                "AIC_AGENT_FAST_MODEL",
+                "openai/gpt-oss-20b",
+            ).strip(),
+            agent_quality_model=os.getenv(
+                "AIC_AGENT_QUALITY_MODEL",
+                "openai/gpt-oss-120b",
+            ).strip(),
+            agent_timeout_s=_env_float("AIC_AGENT_TIMEOUT_S", 12.0),
+            agent_max_history=_env_int("AIC_AGENT_MAX_HISTORY", 8),
+            agent_session_ttl_s=_env_int("AIC_AGENT_SESSION_TTL_S", 1_800),
+            agent_max_evidence_hits=_env_int(
+                "AIC_AGENT_MAX_EVIDENCE_HITS",
+                8,
+            ),
+            agent_service_tier=os.getenv(
+                "AIC_AGENT_SERVICE_TIER",
+                "on_demand",
+            ).strip(),
+            groq_api_key=os.getenv("GROQ_API_KEY", "").strip() or None,
         )
