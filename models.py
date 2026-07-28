@@ -38,8 +38,12 @@ class RouteRequest(BaseModel):
 
 class ModalityDecision(BaseModel):
     enabled: bool
+    # Backward-compatible alias retained for older frontends. These are
+    # heuristic routing scores, not calibrated probabilities.
     confidence: float = Field(ge=0.0, le=1.0)
+    routing_score: float = Field(ge=0.0, le=1.0)
     mode: ModalityMode
+    execution_state: str
     reason: str
     anchors: list[str] = Field(default_factory=list)
 
