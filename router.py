@@ -3,6 +3,11 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from .contracts import (
+    ROUTER_BUILD_VERSION,
+    ROUTER_CONTRACT_VERSION,
+)
+
 from .models import (
     ModalityDecision,
     ModalityMode,
