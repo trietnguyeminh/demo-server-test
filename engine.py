@@ -16,6 +16,7 @@ from urllib.parse import quote
 import numpy as np
 
 from .config import Settings
+from .contracts import ASR_INDEX_CONTRACT_VERSION
 from .router import normalize_text
 
 
@@ -250,7 +251,7 @@ class SQLiteReader:
         key = hashlib.sha256(
             f"{self.source}:{self.source.stat().st_size}:{self.source.stat().st_mtime_ns}".encode()
         ).hexdigest()[:16]
-        target = cache / f"ocr_{key}.sqlite"
+        target = cache / f"index_{key}.sqlite"
         if not target.is_file():
             shutil.copy2(self.source, target)
             wal = Path(str(self.source) + "-wal")
@@ -269,6 +270,151 @@ class SQLiteReader:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
         return connection
+
+
+class ASRSQLiteIndex:
+    """Frame-level ASR FTS adapter.
+
+    The reviewed 03-note notebook builds one document per keyframe in tables
+    ``docs`` and ``docs_fts``. Querying segment rows directly is not compatible
+    with the fusion layer because segment rows do not have an ``item_id``.
+    """
+
+    CONTRACT_VERSION = ASR_INDEX_CONTRACT_VERSION
+    REQUIRED_DOC_COLUMNS = {
+        "item_id", "video_id", "pts_time", "text", "normalized_text",
+    }
+
+    def __init__(
+        self,
+        path: Path,
+        settings: Settings,
+        manifest_path: Path | None = None,
+    ):
+        self.reader = SQLiteReader(path, settings)
+        self.manifest_path = manifest_path if manifest_path and manifest_path.is_file() else None
+        self.manifest: dict[str, Any] = {}
+        self.schema = self._detect_schema()
+        if self.manifest_path is not None:
+            try:
+                payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict):
+                    self.manifest = payload
+                    declared = payload.get("contract_version")
+                    if declared not in (None, "", self.CONTRACT_VERSION):
+                        raise ValueError(
+                            "ASR manifest contract mismatch: "
+                            f"{declared!r} != {self.CONTRACT_VERSION!r}"
+                        )
+            except Exception as exc:
+                self.manifest = {"manifest_error": f"{type(exc).__name__}: {exc}"}
+
+    @staticmethod
+    def _tables(connection: sqlite3.Connection) -> set[str]:
+        return {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
+            ).fetchall()
+        }
+
+    @staticmethod
+    def _columns(connection: sqlite3.Connection, table: str) -> set[str]:
+        safe = table.replace('"', '""')
+        return {
+            str(row[1])
+            for row in connection.execute(f'PRAGMA table_info("{safe}")').fetchall()
+        }
+
+    def _detect_schema(self) -> str:
+        connection = self.reader.connect()
+        try:
+            tables = self._tables(connection)
+            if {"docs", "docs_fts"}.issubset(tables):
+                columns = self._columns(connection, "docs")
+                missing = self.REQUIRED_DOC_COLUMNS - columns
+                if missing:
+                    raise ValueError(
+                        "ASR docs table misses required columns: "
+                        + ", ".join(sorted(missing))
+                    )
+                # Executes an FTS query plan without requiring a matching row.
+                connection.execute(
+                    "SELECT COUNT(*) FROM docs_fts WHERE docs_fts MATCH ?",
+                    ('"__aic_schema_probe__"',),
+                ).fetchone()
+                return self.CONTRACT_VERSION
+
+            # Legacy compatibility is accepted only when the indexed rows already
+            # map to keyframes. A segment-only index cannot be fused safely.
+            if {"segments", "segments_fts"}.issubset(tables):
+                columns = self._columns(connection, "segments")
+                required = {"item_id", "video_id", "pts_time", "text"}
+                if required.issubset(columns):
+                    return "legacy-frame-segments-v1"
+
+            raise ValueError(
+                "Unsupported ASR SQLite schema. Expected docs/docs_fts from "
+                "03-note stage 12, or a legacy keyframe-level segments index."
+            )
+        finally:
+            connection.close()
+
+    def status_details(self) -> dict[str, Any]:
+        details: dict[str, Any] = {
+            "contract_version": self.CONTRACT_VERSION,
+            "schema": self.schema,
+            "sqlite": str(self.reader.effective),
+        }
+        for key in (
+            "profile", "trust_level", "window_s", "n_documents",
+            "n_documents_with_speech", "n_videos_with_speech",
+            "n_segments", "n_segments_kept", "derived_timestamp_ratio",
+            "asr_model",
+        ):
+            if key in self.manifest:
+                details[key] = self.manifest[key]
+        if self.manifest_path is not None:
+            details["manifest"] = str(self.manifest_path)
+        if "manifest_error" in self.manifest:
+            details["manifest_error"] = self.manifest["manifest_error"]
+        return details
+
+    def search(self, query: str, top_k: int) -> list[dict[str, Any]]:
+        terms = tokenize(query)[:20]
+        if not terms:
+            return []
+        match_query = " OR ".join(
+            f'"{term.replace(chr(34), "")}"' for term in terms
+        )
+        connection = self.reader.connect()
+        try:
+            if self.schema == self.CONTRACT_VERSION:
+                sql = (
+                    "SELECT d.*, bm25(docs_fts) AS bm25_score "
+                    "FROM docs_fts JOIN docs d ON d.rowid=docs_fts.rowid "
+                    "WHERE docs_fts MATCH ? ORDER BY bm25_score LIMIT ?"
+                )
+            else:
+                sql = (
+                    "SELECT s.*, bm25(segments_fts) AS bm25_score "
+                    "FROM segments_fts JOIN segments s ON s.rowid=segments_fts.rowid "
+                    "WHERE segments_fts MATCH ? ORDER BY bm25_score LIMIT ?"
+                )
+            rows = [
+                dict(row)
+                for row in connection.execute(
+                    sql, (match_query, int(top_k))
+                ).fetchall()
+            ]
+        finally:
+            connection.close()
+
+        for rank, row in enumerate(rows, start=1):
+            row["asr_rank"] = rank
+            row["asr_score"] = -float(row.get("bm25_score", 0.0))
+            row["asr_text"] = str(row.get("text", ""))
+        return rows
 
 
 class SigLIPTextEncoder:
@@ -389,11 +535,18 @@ class ArtifactEngine(BaseEngine):
             except Exception as exc:
                 print("[WARN] FAISS unavailable, using NumPy search:", exc)
 
-        self.asr = (
-            SQLiteReader(settings.asr_sqlite, settings)
-            if settings.asr_sqlite and settings.asr_sqlite.is_file()
-            else None
-        )
+        self.asr: ASRSQLiteIndex | None = None
+        self.asr_error: str | None = None
+        if settings.asr_sqlite and settings.asr_sqlite.is_file():
+            try:
+                self.asr = ASRSQLiteIndex(
+                    settings.asr_sqlite,
+                    settings,
+                    settings.asr_manifest,
+                )
+            except Exception as exc:
+                self.asr_error = f"{type(exc).__name__}: {exc}"
+                print("[WARN] ASR index disabled:", self.asr_error)
 
     def status(self) -> EngineStatus:
         return EngineStatus(
@@ -406,6 +559,19 @@ class ArtifactEngine(BaseEngine):
                 "dimension": int(self.embeddings.shape[1]),
                 "faiss": self.faiss is not None,
                 "ocr_sqlite": str(self.sqlite.effective),
+                "asr": (
+                    self.asr.status_details()
+                    if self.asr is not None
+                    else {
+                        "ready": False,
+                        "error": self.asr_error,
+                        "requested_path": (
+                            str(self.settings.asr_sqlite)
+                            if self.settings.asr_sqlite
+                            else None
+                        ),
+                    }
+                ),
             },
         )
 
@@ -482,28 +648,7 @@ class ArtifactEngine(BaseEngine):
     def search_asr(self, query: str, top_k: int) -> list[dict[str, Any]]:
         if self.asr is None:
             return []
-        terms = tokenize(query)[:20]
-        if not terms:
-            return []
-        match_query = " OR ".join(f'"{term}"' for term in terms)
-        connection = self.asr.connect()
-        try:
-            rows = [
-                dict(row)
-                for row in connection.execute(
-                    "SELECT s.*, bm25(segments_fts) AS bm25_score "
-                    "FROM segments_fts JOIN segments s ON s.rowid=segments_fts.rowid "
-                    "WHERE segments_fts MATCH ? ORDER BY bm25_score LIMIT ?",
-                    (match_query, top_k),
-                ).fetchall()
-            ]
-        finally:
-            connection.close()
-        for rank, row in enumerate(rows, start=1):
-            row["asr_rank"] = rank
-            row["asr_score"] = -float(row.get("bm25_score", 0.0))
-            row["asr_text"] = row.get("text", "")
-        return rows
+        return self.asr.search(query, top_k)
 
     def frame_path(self, item_id: str) -> Path | None:
         row = self.by_item.get(item_id)
