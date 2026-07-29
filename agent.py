@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from .config import Settings
+from .contracts import AGENT_CONTRACT_VERSION
 from .models import (
     AgentChatRequest,
     AgentChatResponse,
@@ -28,8 +29,6 @@ from .providers import (
 )
 from .service import SearchService
 
-
-AGENT_CONTRACT_VERSION = "provider-registry-v2"
 
 
 @dataclass
