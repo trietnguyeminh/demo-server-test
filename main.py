@@ -11,6 +11,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .agent import AgentService
 from .config import Settings
+from .contracts import (
+    AGENT_CONTRACT_VERSION,
+    APP_BUILD_VERSION,
+    ASR_INDEX_CONTRACT_VERSION,
+    PROVIDER_REGISTRY_CONTRACT,
+    ROUTER_CONTRACT_VERSION,
+    public_contracts,
+)
 from .engine import build_engine
 from .models import (
     AgentChatRequest,
@@ -21,9 +29,6 @@ from .models import (
 from .service import SearchService
 
 
-APP_BUILD_VERSION = "multi-provider-agent-v5.0"
-ROUTER_CONTRACT_VERSION = "routing-score-v2"
-AGENT_CONTRACT_VERSION = "provider-registry-v2"
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = ROOT / "docs"
@@ -40,7 +45,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AIC Latency-first Retrieval Demo",
-    version="0.5.0",
+    version="0.7.0",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -73,6 +78,9 @@ def health(request: Request):
         "agent_contract_version": AGENT_CONTRACT_VERSION,
         "app_build_version": APP_BUILD_VERSION,
         "router_contract_version": ROUTER_CONTRACT_VERSION,
+        "provider_registry_contract": PROVIDER_REGISTRY_CONTRACT,
+        "asr_index_contract_version": ASR_INDEX_CONTRACT_VERSION,
+        "contracts": public_contracts(),
     }
 
 
@@ -87,6 +95,9 @@ def config(request: Request):
         "agent_contract_version": AGENT_CONTRACT_VERSION,
         "app_build_version": APP_BUILD_VERSION,
         "router_contract_version": ROUTER_CONTRACT_VERSION,
+        "provider_registry_contract": PROVIDER_REGISTRY_CONTRACT,
+        "asr_index_contract_version": ASR_INDEX_CONTRACT_VERSION,
+        "contracts": public_contracts(),
         "profile_descriptions": {
             "fast": "Visual-first; OCR chỉ khi tín hiệu rất mạnh.",
             "auto": "Visual + OCR nhẹ song song; cân bằng recall và latency.",
