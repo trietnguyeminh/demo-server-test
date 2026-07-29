@@ -9,9 +9,7 @@ from typing import Any
 import httpx
 
 from .config import Settings
-
-
-PROVIDER_REGISTRY_CONTRACT = "provider-registry-v2"
+from .contracts import PROVIDER_REGISTRY_CONTRACT
 
 
 class ProviderError(RuntimeError):
