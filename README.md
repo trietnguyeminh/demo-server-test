@@ -6,7 +6,7 @@ Repo tối giản để kiểm tra ba thứ cùng lúc:
 2. latency breakdown;
 3. UI có manual override và chạy được trên GitHub Pages.
 
-# Link :https://github.com/trietnguyeminh/demo-server-test/settings/pages
+# Link :[https://github.com/trietnguyeminh/demo-server-test/settings/pages](https://trietnguyeminh.github.io/demo-server-test/)
 ## Chạy ngay bằng mock data
 
 ```bash
