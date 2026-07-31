@@ -1,260 +1,293 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="signal-desk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="AIC interactive agent video retrieval demo">
-  <title>AIC Video Retrieval Agent</title>
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="description" content="AIC Signal Desk: interactive agent video retrieval with Visual, OCR and ASR evidence">
+  <title>AIC Signal Desk — Video Retrieval Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">AIC • retrieval agent • accuracy + latency</p>
-        <h1>Trao đổi với agent để tìm video và kiểm tra evidence</h1>
-        <p class="subtitle">
-          Retrieval Visual/OCR/ASR chạy trong Kaggle. 
-        </p>
-        <p class="version-note">UI multi-provider-agent-v5.0</p>
-      </div>
-      <div class="health-card">
-        <span id="healthDot" class="dot"></span>
-        <div>
-          <strong id="healthText">Chưa kiểm tra server</strong>
-          <small id="backendText">API mặc định: cùng domain</small>
-          <small id="agentText">Agent: chưa kiểm tra</small>
+  <a class="skip-link" href="#agentMessage">Chuyển đến ô chat</a>
+
+  <div class="app-frame">
+    <header class="utility-bar">
+      <a class="brand" href="#workspace" aria-label="AIC Signal Desk — về workspace chính">
+        <span class="brand-tally" aria-hidden="true"></span>
+        <span class="brand-copy">
+          <span class="brand-kicker">AIC / VIDEO RETRIEVAL</span>
+          <strong>Signal Desk</strong>
+        </span>
+        <span class="version-note" translate="no">UI evidence-desk-v7.0</span>
+      </a>
+
+      <div class="connection-strip">
+        <label class="api-field" for="apiBase">
+          <span>Server API</span>
+          <input id="apiBase" name="api_base" type="url" inputmode="url"
+            autocomplete="off" spellcheck="false"
+            placeholder="Dán URL trycloudflare…">
+        </label>
+
+        <div class="health-card" aria-live="polite">
+          <span id="healthDot" class="health-dot" aria-hidden="true"></span>
+          <span class="health-copy">
+            <strong id="healthText">Chưa kiểm tra</strong>
+            <small id="backendText">Visual / OCR / ASR: —</small>
+            <small id="agentText">Agent: —</small>
+          </span>
+          <button id="healthButton" type="button" class="button button-quiet button-small">
+            Kiểm tra server
+          </button>
         </div>
-        <button id="healthButton" type="button" class="secondary">Kiểm tra</button>
       </div>
     </header>
 
-    <section class="connection-panel">
-      <label class="field full">
-        <span>Server API</span>
-        <input id="apiBase" type="url"
-          placeholder="Dán URL trycloudflare; chạy cùng FastAPI thì để trống">
-      </label>
-    </section>
-
-    <nav class="workspace-tabs" aria-label="Workspace">
-      <button type="button" class="tab active" data-tab="agent">Agent chat</button>
-      <button type="button" class="tab" data-tab="search">Direct search</button>
-    </nav>
-
-    <section id="agentWorkspace" class="workspace">
-      <div class="agent-layout">
-        <section class="chat-panel">
-          <div class="section-title">
-            <div>
-              <p class="eyebrow">Conversation</p>
-              <h2>Hỏi – tìm – refine nhiều lượt</h2>
+    <main id="workspace" class="workspace-grid">
+      <aside class="operator-pane" aria-labelledby="chatTitle">
+        <section id="agentWorkspace" class="chat-card">
+          <header class="panel-header chat-header">
+            <div class="panel-title">
+              <span class="section-code">OPERATOR LOG</span>
+              <h1 id="chatTitle">Chat với Retrieval Agent</h1>
             </div>
-            <button id="newSessionButton" class="secondary small" type="button">
-              Cuộc trò chuyện mới
+            <button id="newSessionButton" class="button button-quiet button-small" type="button">
+              Chat mới
             </button>
-          </div>
+          </header>
 
-          <div id="chatMessages" class="chat-messages" aria-live="polite">
-            <article class="message assistant">
+          <details class="control-drawer">
+            <summary>
+              <span>Runtime &amp; Retrieval</span>
+              <span class="summary-state">provider · model · OCR · ASR</span>
+            </summary>
+
+            <div class="control-grid">
+              <label class="field" for="agentMode">
+                <span>Agent mode</span>
+                <select id="agentMode" name="agent_mode">
+                  <option value="local">Local — không gọi model</option>
+                  <option value="planner" selected>Planner — 1 API call</option>
+                  <option value="full">Full — planner + answer</option>
+                </select>
+                <small id="agentModeHelp"></small>
+              </label>
+
+              <label class="field" for="agentProviderSelect">
+                <span>API provider</span>
+                <select id="agentProviderSelect" name="agent_provider">
+                  <option value="auto" selected>Auto — provider sẵn sàng đầu tiên</option>
+                </select>
+                <small>API key chỉ nằm trong backend.</small>
+              </label>
+
+              <label class="field field-wide" for="agentModelOverride">
+                <span>Model override</span>
+                <input id="agentModelOverride" name="agent_model" type="text"
+                  autocomplete="off" spellcheck="false"
+                  placeholder="Để trống để dùng model mặc định…">
+              </label>
+
+              <label class="field" for="agentModelTier">
+                <span>Model tier</span>
+                <select id="agentModelTier" name="agent_model_tier">
+                  <option value="auto" selected>Auto</option>
+                  <option value="fast">Fast</option>
+                  <option value="quality">Quality</option>
+                </select>
+              </label>
+
+              <label class="field" for="profileSelect">
+                <span>Retrieval profile</span>
+                <select id="profileSelect" name="profile">
+                  <option value="fast">Fast</option>
+                  <option value="auto" selected>Auto</option>
+                  <option value="accurate">Accurate</option>
+                </select>
+                <small id="profileHelp"></small>
+              </label>
+
+              <label class="field" for="ocrMode">
+                <span>OCR</span>
+                <select id="ocrMode" name="ocr_mode">
+                  <option value="off">Off</option>
+                  <option value="auto" selected>Auto</option>
+                  <option value="on">On</option>
+                </select>
+              </label>
+
+              <label class="field" for="asrMode">
+                <span>ASR</span>
+                <select id="asrMode" name="asr_mode">
+                  <option value="off">Off</option>
+                  <option value="auto" selected>Auto</option>
+                  <option value="on">On</option>
+                </select>
+              </label>
+
+              <label class="field" for="topK">
+                <span>Top K</span>
+                <input id="topK" name="top_k" type="number" inputmode="numeric"
+                  min="1" max="100" value="20" autocomplete="off">
+              </label>
+
+              <label class="check-row" for="adaptiveFallback">
+                <input id="adaptiveFallback" name="adaptive_fallback" type="checkbox" checked>
+                <span>Adaptive fallback</span>
+              </label>
+            </div>
+
+            <dl class="runtime-readout">
+              <div><dt>Selected</dt><dd id="agentProvider">—</dd></div>
+              <div><dt>Ready APIs</dt><dd id="agentModels">—</dd></div>
+              <div><dt>Secrets</dt><dd id="agentKeyStatus">Backend only</dd></div>
+            </dl>
+          </details>
+
+          <div id="chatMessages" class="chat-messages" aria-live="polite" aria-relevant="additions text">
+            <article class="message message-assistant">
               <div class="message-role">Agent</div>
               <p>
-                Mô tả video cần tìm. Tôi có thể tách visual/OCR/ASR, chạy
-                retrieval và trả lời dựa trên evidence.
+                Mô tả cảnh, chữ trên màn hình hoặc lời thoại. Chọn một keyframe ở
+                contact sheet để đưa ID, vị trí ảnh và timecode vào chat.
               </p>
             </article>
           </div>
 
-          <label class="field full">
-            <span>Tin nhắn</span>
-            <textarea id="agentMessage" rows="3"
-              placeholder="Ví dụ: tìm túi vải có dòng chữ liên kết cùng phát triển">túi vải liên kết cùng phát triển</textarea>
-          </label>
+          <section id="statusArea" class="status-area" aria-live="polite"></section>
 
-          <div class="agent-actions">
-            <button id="agentSendButton" class="primary" type="button">
-              Gửi cho agent
-            </button>
-            <small>Ctrl/Cmd + Enter để gửi</small>
+          <form id="chatComposer" class="composer">
+            <label for="agentMessage">Tin nhắn hoặc truy vấn</label>
+            <textarea id="agentMessage" name="message" rows="3"
+              autocomplete="off"
+              placeholder="Ví dụ: tìm túi vải có dòng chữ liên kết cùng phát triển…">túi vải liên kết cùng phát triển</textarea>
+            <div class="composer-actions">
+              <button id="agentSendButton" class="button button-primary" type="submit">
+                Gửi Agent
+              </button>
+              <button id="searchButton" class="button button-secondary" type="button">
+                Tìm trực tiếp
+              </button>
+            </div>
+            <small><kbd>Ctrl</kbd>/<kbd>⌘</kbd>&nbsp;+&nbsp;<kbd>Enter</kbd> để gửi</small>
+          </form>
+
+          <textarea id="query" class="visually-hidden" tabindex="-1"
+            aria-hidden="true">túi vải liên kết cùng phát triển</textarea>
+        </section>
+      </aside>
+
+      <section id="evidenceColumn" class="evidence-pane" aria-labelledby="evidenceTitle" aria-busy="false">
+        <header class="panel-header evidence-header">
+          <div class="panel-title">
+            <span class="section-code">CONTACT SHEET</span>
+            <h2 id="evidenceTitle">Evidence Keyframes</h2>
+          </div>
+          <div class="evidence-badges" aria-live="polite">
+            <span id="selectedFrameBadge" class="badge badge-selection">Chưa chọn frame</span>
+            <span id="resultCount" class="badge">0 kết quả</span>
+          </div>
+        </header>
+
+        <section id="stageEmpty" class="stage-empty" aria-label="Chưa chọn keyframe">
+          <span class="stage-empty-mark" aria-hidden="true">⌑</span>
+          <div>
+            <strong>Monitor đang chờ keyframe</strong>
+            <p>Chạy retrieval, sau đó chọn một frame trong contact sheet.</p>
           </div>
         </section>
 
-        <aside class="agent-settings">
-          <p class="eyebrow">Agent runtime</p>
-          <h2>Chế độ tương tác</h2>
-
-          <label class="field">
-            <span>Agent mode</span>
-            <select id="agentMode">
-              <option value="local">Local — không gọi model</option>
-              <option value="planner" selected>Planner — 1 API call</option>
-              <option value="full">Full agent — planner + answer</option>
-            </select>
-            <small id="agentModeHelp"></small>
-          </label>
-
-          <label class="field">
-            <span>API provider</span>
-            <select id="agentProviderSelect">
-              <option value="auto" selected>Auto — provider sẵn sàng đầu tiên</option>
-            </select>
-            <small>API key nằm trong Kaggle Secrets, không nằm ở frontend.</small>
-          </label>
-
-          <label class="field">
-            <span>Model override (tùy chọn)</span>
-            <input id="agentModelOverride" type="text"
-              placeholder="Để trống để dùng Fast/Quality model mặc định">
-          </label>
-
-          <label class="field">
-            <span>Model tier</span>
-            <select id="agentModelTier">
-              <option value="auto" selected>Auto</option>
-              <option value="fast">Fast — GPT-OSS 20B</option>
-              <option value="quality">Quality — GPT-OSS 120B</option>
-            </select>
-          </label>
-
-          <div class="agent-runtime-card">
-            <span>Selected</span>
-            <strong id="agentProvider">—</strong>
-            <span>Ready APIs</span>
-            <strong id="agentModels">—</strong>
-            <span>Secrets</span>
-            <strong id="agentKeyStatus">Backend only</strong>
+        <section id="selectedPreview" class="selected-stage" hidden aria-live="polite">
+          <div class="stage-screen">
+            <img id="selectedPreviewImage" width="1600" height="900"
+              alt="Keyframe đang chọn" decoding="async">
+            <span class="stage-tally" aria-hidden="true"></span>
+            <span id="selectedPreviewRank" class="stage-rank">RANK —</span>
+            <time id="selectedPreviewTimecode" class="stage-timecode">00:00.00</time>
           </div>
-        </aside>
-      </div>
-    </section>
 
-    <section id="searchWorkspace" class="workspace" hidden>
-      <section class="control-panel">
-        <label class="field full">
-          <span>Truy vấn trực tiếp</span>
-          <textarea id="query" rows="3">túi vải liên kết cùng phát triển</textarea>
-        </label>
-        <button id="searchButton" type="button" class="primary">Tìm kiếm</button>
+          <div class="stage-slate">
+            <span class="section-code">SELECTED SHOT</span>
+            <strong id="selectedPreviewTitle">—</strong>
+            <small id="selectedPreviewMeta">—</small>
+            <div class="stage-actions">
+              <button id="copySelectedButton" type="button" class="button button-primary button-small">
+                Sao chép toàn bộ
+              </button>
+              <button id="copySubmissionButton" type="button" class="button button-secondary button-small">
+                Copy Video,Keyframe
+              </button>
+              <a id="openSelectedLink" class="button button-quiet button-small"
+                href="#" target="_blank" rel="noopener">Mở ảnh gốc</a>
+            </div>
+            <span id="selectedCopyFeedback" class="copy-feedback" aria-live="polite"></span>
+          </div>
+        </section>
+
+        <div class="contact-sheet-scroll">
+          <div id="results" class="contact-sheet">
+            <div class="empty-state">
+              <span class="empty-index">00</span>
+              <div>
+                <strong>Chưa có candidate</strong>
+                <p>Gửi tin nhắn cho Agent hoặc chọn “Tìm trực tiếp”.</p>
+              </div>
+            </div>
+          </div>
+
+          <details class="inspector-drawer">
+            <summary>
+              <span>Latency &amp; Routing Inspector</span>
+              <span class="summary-state">mở khi cần debug</span>
+            </summary>
+
+            <div class="inspector-content">
+              <section class="summary-grid" id="summaryGrid" hidden aria-label="Latency metrics">
+                <article class="metric"><span>End-to-end</span><strong id="endToEndLatency">—</strong></article>
+                <article class="metric"><span>Agent total</span><strong id="agentTotalLatency">—</strong></article>
+                <article class="metric"><span>Planner API</span><strong id="plannerLatency">—</strong></article>
+                <article class="metric"><span>Retrieval</span><strong id="searchLatency">—</strong></article>
+                <article class="metric"><span>Answer API</span><strong id="answerLatency">—</strong></article>
+                <article class="metric"><span>Server search</span><strong id="serverLatency">—</strong></article>
+                <article class="metric"><span>Visual</span><strong id="visualLatency">—</strong></article>
+                <article class="metric"><span>OCR</span><strong id="ocrLatency">—</strong></article>
+                <article class="metric"><span>ASR</span><strong id="asrLatency">—</strong></article>
+              </section>
+
+              <details id="agentPlanPanel" class="diagnostic-panel" hidden>
+                <summary>
+                  <span>Agent plan</span>
+                  <span id="agentModelBadge" class="badge">—</span>
+                </summary>
+                <div class="plan-grid">
+                  <article><span>Resolved query</span><strong id="resolvedQuery">—</strong></article>
+                  <article><span>Intent</span><strong id="agentIntent">—</strong></article>
+                  <article><span>OCR / ASR</span><strong id="agentModalities">—</strong></article>
+                  <article><span>Rationale</span><strong id="agentRationale">—</strong></article>
+                </div>
+              </details>
+
+              <details id="routePanel" class="diagnostic-panel" hidden>
+                <summary>
+                  <span>Local router</span>
+                  <span id="complexityBadge" class="badge">độ phức tạp —</span>
+                </summary>
+                <p class="route-note">
+                  Routing score là heuristic bật module, không phải xác suất model đúng.
+                </p>
+                <div id="routeCards" class="route-grid"></div>
+              </details>
+            </div>
+          </details>
+        </div>
       </section>
-    </section>
+    </main>
+  </div>
 
-    <section class="shared-controls">
-      <div class="field profile-field">
-        <span>Retrieval profile</span>
-        <div class="segmented" role="group" aria-label="Search profile">
-          <button type="button" data-profile="fast">⚡ Fast</button>
-          <button type="button" data-profile="auto" class="active">⚖ Auto</button>
-          <button type="button" data-profile="accurate">🎯 Accurate</button>
-        </div>
-        <small id="profileHelp" class="profile-help"></small>
-      </div>
-
-      <label class="field">
-        <span>OCR</span>
-        <select id="ocrMode">
-          <option value="off">Off</option>
-          <option value="auto" selected>Auto</option>
-          <option value="on">On</option>
-        </select>
-      </label>
-
-      <label class="field">
-        <span>ASR</span>
-        <select id="asrMode">
-          <option value="off">Off</option>
-          <option value="auto" selected>Auto</option>
-          <option value="on">On</option>
-        </select>
-      </label>
-
-      <label class="field compact">
-        <span>Top K</span>
-        <input id="topK" type="number" min="1" max="100" value="20">
-      </label>
-
-      <label class="check-row">
-        <input id="adaptiveFallback" type="checkbox" checked>
-        <span>Adaptive fallback</span>
-      </label>
-    </section>
-
-    <section id="statusArea" class="status-area" aria-live="polite"></section>
-
-    <section class="summary-grid" id="summaryGrid" hidden>
-      <article class="metric">
-        <span>End-to-end</span><strong id="endToEndLatency">—</strong>
-        <small>Browser → API → render</small>
-      </article>
-      <article class="metric">
-        <span>Agent total</span><strong id="agentTotalLatency">—</strong>
-        <small>Planner + retrieval + answer</small>
-      </article>
-      <article class="metric">
-        <span>Planner API</span><strong id="plannerLatency">—</strong>
-      </article>
-      <article class="metric">
-        <span>Retrieval</span><strong id="searchLatency">—</strong>
-      </article>
-      <article class="metric">
-        <span>Answer API</span><strong id="answerLatency">—</strong>
-      </article>
-      <article class="metric">
-        <span>Server search</span><strong id="serverLatency">—</strong>
-      </article>
-      <article class="metric">
-        <span>Visual</span><strong id="visualLatency">—</strong>
-      </article>
-      <article class="metric">
-        <span>OCR</span><strong id="ocrLatency">—</strong>
-      </article>
-      <article class="metric">
-        <span>ASR</span><strong id="asrLatency">—</strong>
-      </article>
-    </section>
-
-    <section id="agentPlanPanel" class="agent-plan-panel" hidden>
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Agent plan</p>
-          <h2>Truy vấn đã resolve</h2>
-        </div>
-        <span id="agentModelBadge" class="badge">—</span>
-      </div>
-      <div class="plan-grid">
-        <article><span>Resolved query</span><strong id="resolvedQuery">—</strong></article>
-        <article><span>Intent</span><strong id="agentIntent">—</strong></article>
-        <article><span>OCR / ASR</span><strong id="agentModalities">—</strong></article>
-        <article><span>Rationale</span><strong id="agentRationale">—</strong></article>
-      </div>
-    </section>
-
-    <section id="routePanel" class="route-panel" hidden>
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Local router decision</p>
-          <h2>Điểm routing và trạng thái thực thi</h2>
-        </div>
-        <span id="complexityBadge" class="badge">độ phức tạp —</span>
-      </div>
-      <p class="route-note">
-        Routing score là heuristic bật module, không phải xác suất model đúng.
-      </p>
-      <div id="routeCards" class="route-grid"></div>
-    </section>
-
-    <section>
-      <div class="section-title">
-        <div>
-          <p class="eyebrow">Evidence</p>
-          <h2>Candidate gallery</h2>
-        </div>
-        <span id="resultCount" class="badge">0 kết quả</span>
-      </div>
-      <div id="results" class="results-grid">
-        <div class="empty">Gửi tin nhắn cho agent hoặc chạy direct search.</div>
-      </div>
-    </section>
-  </main>
   <script src="./app.js" defer></script>
 </body>
 </html>
